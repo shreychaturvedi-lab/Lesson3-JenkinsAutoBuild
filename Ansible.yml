@@ -1,0 +1,56 @@
+---
+- hosts: all
+  become: true
+  vars:
+   home_dir: "/etc/mysql"
+
+  tasks:
+  - name: add mysql repo
+    get_url:
+      url: https://dev.mysql.com/get/mysql-apt-config_0.8.6-1_all.deb
+      dest: "{{home_dir}}"
+      mode: 0440
+     
+  - name: install mysql repo
+    apt: "deb={{home_dir}}/mysql-apt-config_0.8.6-1_all.deb"
+    become: true
+ 
+  - name: install python-mysqldb
+    apt:
+      name: python-mysqldb
+      state: present
+      update_cache: yes
+       
+  - name: check latest version of mysql 5.7
+    command: bash -c "apt-cache showpkg mysql-server|grep 5.7|head -1|cut -d' ' -f1"
+    register: latestmysql57
+  - debug: msg="{{ latestmysql57.stdout }}"
+   
+  - name: install mysql 57
+    apt:
+      name: mysql-server={{ latestmysql57.stdout }}
+      state: present
+      update_cache: yes
+ 
+  #check if mysql service is started
+  - name: Start the MySQL service
+    become: true
+    service: 
+      name: mysql 
+      state: started
+      enabled: true
+       
+  - name: update mysql root password for all root accounts
+    become: true
+    mysql_user: 
+      name: root 
+      host: "{{ item }}" 
+      password: "{{ mysql_root_password }}"
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+      check_implicit_admin: yes
+      priv: "*.*:ALL,GRANT"
+    with_items:
+      - 127.0.0.1
+      - ::1
+      - localhost 
